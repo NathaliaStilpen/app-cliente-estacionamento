@@ -38,26 +38,30 @@ class _LoginPageState extends State<LoginPage> {
     final email = _cpfController.text;
     final password = _passwordController.text;
 
-    final response = await http.post(
-      Uri.parse('http://localhost:5000/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'senha': password}),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final token = data['token'];
-
-      // Navegar para a página principal passando o token
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MainPage(token: token),
-        ),
+    try {
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'senha': password}),
       );
-    } else {
+
+      print('Login Response: ${response.body}');
+      if (response.statusCode == 200) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MainPage(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Email ou senha incorretos')),
+        );
+      }
+    } catch (e) {
+      print('Login Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Email ou senha incorretos')),
+        SnackBar(content: Text('Erro de rede. Tente novamente mais tarde.')),
       );
     }
   }
@@ -135,28 +139,36 @@ class RegisterPage extends StatelessWidget {
     final city = _cityController.text;
     final password = _passwordController.text;
 
-    final response = await http.post(
-      Uri.parse('http://localhost:5000/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'cpf': cpf,
-        'email': email,
-        'placa_do_carro': carPlate,
-        'estado': state,
-        'cidade': city,
-        'senha': password,
-      }),
-    );
-
-    if (response.statusCode == 201) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cadastro bem-sucedido')),
+    try {
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'cpf': cpf,
+          'email': email,
+          'placadocarro': carPlate,
+          'estado': state,
+          'cidade': city,
+          'senha': password,
+        }),
       );
-      Navigator.pop(context);
-    } else {
-      final data = jsonDecode(response.body);
+
+      print('Register Response: ${response.body}');
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cadastro bem-sucedido')),
+        );
+        Navigator.pop(context);
+      } else {
+        final data = jsonDecode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao cadastrar: ${data['message']}')),
+        );
+      }
+    } catch (e) {
+      print('Register Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao cadastrar: ${data['message']}')),
+        SnackBar(content: Text('Erro de rede. Tente novamente mais tarde.')),
       );
     }
   }
@@ -219,10 +231,52 @@ class RegisterPage extends StatelessWidget {
   }
 }
 
-class MainPage extends StatelessWidget {
-  final String token;
+class MainPage extends StatefulWidget {
+  @override
+  _MainPageState createState() => _MainPageState();
+}
 
-  MainPage({required this.token});
+class _MainPageState extends State<MainPage> {
+  String? activeSpotInfo = 'Carregando...'; // Informações da vaga ativa
+
+  // Função para buscar e exibir a vaga ativa do cliente
+  void _fetchActiveSpot() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://localhost:5000/active_spot'), // URL para buscar a vaga ativa
+      );
+
+      if (response.statusCode == 200) {
+        final activeSpotData = jsonDecode(response.body);
+        final activeSpotID = activeSpotData['IDVaga'];
+        final horaEntrada = activeSpotData['horaEntrada'];
+        final horaSaida = activeSpotData['horaSaida'];
+
+        setState(() {
+          // Atualiza o estado para exibir as informações da vaga ativa
+          activeSpotInfo = 'Vaga Ativa: ID $activeSpotID, Hora de Entrada: $horaEntrada, Hora de Saída: $horaSaida';
+        });
+      } else {
+        setState(() {
+          // Se não houver vaga ativa, exibe uma mensagem informando ao usuário
+          activeSpotInfo = 'Não há vaga ativa para o cliente';
+        });
+      }
+    } catch (e) {
+      print('Erro ao buscar vaga ativa: $e');
+      setState(() {
+        // Em caso de erro, exibe uma mensagem de erro
+        activeSpotInfo = 'Erro ao buscar vaga ativa';
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Chama a função para buscar a vaga ativa ao iniciar a página
+    _fetchActiveSpot();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -241,7 +295,7 @@ class MainPage extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => BuyCreditsPage(token: token)),
+                    MaterialPageRoute(builder: (context) => BuyCreditsPage()),
                   );
                 },
                 child: Text('Comprar Créditos', style: TextStyle(color: Colors.white)),
@@ -251,14 +305,14 @@ class MainPage extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => ViewParkedSpotsPage(token: token)),
+                    MaterialPageRoute(builder: (context) => ViewParkedSpotsPage()),
                   );
                 },
                 child: Text('Ver Vagas Estacionadas', style: TextStyle(color: Colors.white)),
               ),
               SizedBox(height: 20),
               Text(
-                'Informações sobre a vaga ativa e o tempo restante',
+                activeSpotInfo ?? 'Carregando...', // Exibe as informações da vaga ativa
                 style: TextStyle(fontSize: 18),
                 textAlign: TextAlign.center,
               ),
@@ -270,11 +324,8 @@ class MainPage extends StatelessWidget {
   }
 }
 
+
 class BuyCreditsPage extends StatefulWidget {
-  final String token;
-
-  BuyCreditsPage({required this.token});
-
   @override
   _BuyCreditsPageState createState() => _BuyCreditsPageState();
 }
@@ -292,10 +343,7 @@ class _BuyCreditsPageState extends State<BuyCreditsPage> {
     if (selectedCity != null && selectedArea != null && selectedTime != null) {
       final response = await http.post(
         Uri.parse('https://seu-backend.com/buy_credits'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${widget.token}',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'city': selectedCity!,
           'area': selectedArea!,
@@ -309,7 +357,7 @@ class _BuyCreditsPageState extends State<BuyCreditsPage> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Falha na compra de créditos')),
+          SnackBar(content: Text('Falha ao comprar créditos')),
         );
       }
     } else {
@@ -325,123 +373,95 @@ class _BuyCreditsPageState extends State<BuyCreditsPage> {
       appBar: AppBar(
         title: Text('Comprar Créditos'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DropdownButtonFormField<String>(
-              decoration: InputDecoration(labelText: 'Selecione a cidade', border: OutlineInputBorder()),
-              value: selectedCity,
-              items: cities.map((city) {
-                return DropdownMenuItem(
-                  value: city,
-                  child: Text(city),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedCity = value;
-                });
-              },
-            ),
-            SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              decoration: InputDecoration(labelText: 'Selecione a rua ou área azul', border: OutlineInputBorder()),
-              value: selectedArea,
-              items: areas.map((area) {
-                return DropdownMenuItem(
-                  value: area,
-                  child: Text(area),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedArea = value;
-                });
-              },
-            ),
-            SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              decoration: InputDecoration(labelText: 'Selecione o tempo', border: OutlineInputBorder()),
-              value: selectedTime,
-              items: times.map((time) {
-                return DropdownMenuItem(
-                  value: time,
-                  child: Text(time),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedTime = value;
-                });
-              },
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _buyCredits,
-              child: Text('Comprar Créditos', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedCity,
+                items: cities.map((city) {
+                  return DropdownMenuItem(
+                    value: city,
+                    child: Text(city),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCity = value;
+                  });
+                },
+                decoration: InputDecoration(labelText: 'Cidade', border: OutlineInputBorder()),
+              ),
+              SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: selectedArea,
+                items: areas.map((area) {
+                  return DropdownMenuItem(
+                    value: area,
+                    child: Text(area),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedArea = value;
+                  });
+                },
+                decoration: InputDecoration(labelText: 'Área Azul', border: OutlineInputBorder()),
+              ),
+              SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: selectedTime,
+                items: times.map((time) {
+                  return DropdownMenuItem(
+                    value: time,
+                    child: Text(time),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedTime = value;
+                  });
+                },
+                decoration: InputDecoration(labelText: 'Tempo', border: OutlineInputBorder()),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _buyCredits,
+                child: Text('Comprar Créditos', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class ViewParkedSpotsPage extends StatefulWidget {
-  final String token;
-
-  ViewParkedSpotsPage({required this.token});
-
-  @override
-  _ViewParkedSpotsPageState createState() => _ViewParkedSpotsPageState();
-}
-
-class _ViewParkedSpotsPageState extends State<ViewParkedSpotsPage> {
-  List<Map<String, dynamic>> parkedSpots = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchParkedSpots();
-  }
-
-  Future<void> _fetchParkedSpots() async {
-    final response = await http.get(
-      Uri.parse('https://seu-backend.com/parked_spots'),
-      headers: {
-        'Authorization': 'Bearer ${widget.token}',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      setState(() {
-        parkedSpots = List<Map<String, dynamic>>.from(json.decode(response.body));
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Falha ao carregar vagas estacionadas')),
-      );
-    }
-  }
-
+class ViewParkedSpotsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Vagas Estacionadas'),
       ),
-      body: ListView.builder(
-        itemCount: parkedSpots.length,
-        itemBuilder: (context, index) {
-          final spot = parkedSpots[index];
-          return ListTile(
-            title: Text('${spot['city']} - ${spot['area']}'),
-            subtitle: Text('Tempo: ${spot['time']} horas'),
-          );
-        },
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Aqui você poderá visualizar as vagas estacionadas',
+                style: TextStyle(fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
