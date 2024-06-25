@@ -342,12 +342,13 @@ class _MainPageState extends State<MainPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(
-                context,
-                '/comprar_vaga',
-                arguments: widget.placaDoCarro,
+              onPressed: () async {
+                await Navigator.pushNamed(
+                  context,
+                  '/comprar_vaga',
+                  arguments: widget.placaDoCarro,
                 );
+                _loadActiveSpot(); // Recarregar as vagas ao retornar
               },
               child: Text('Comprar Vaga'),
             ),
@@ -404,6 +405,7 @@ class _MainPageState extends State<MainPage> {
     );
   }
 }
+
 
 class VagaAntiga {
   final DateTime horaEntrada;
@@ -528,9 +530,9 @@ class ComprarVagaPage extends StatefulWidget {
 }
 
 class _ComprarVagaPageState extends State<ComprarVagaPage> {
-  final _tempoController = TextEditingController();
   String? _selectedCity;
   String? _selectedStreet;
+  int? _selectedDuration;
   List<String> _cities = [];
   List<String> _streets = [];
 
@@ -583,7 +585,7 @@ class _ComprarVagaPageState extends State<ComprarVagaPage> {
   Future<void> _comprarVaga() async {
     final city = _selectedCity;
     final street = _selectedStreet;
-    final tempo = int.tryParse(_tempoController.text);
+    final tempo = _selectedDuration;
 
     if (city == null || street == null || tempo == null) {
       _showErrorSnackbar('Por favor, preencha todos os campos');
@@ -606,7 +608,7 @@ class _ComprarVagaPageState extends State<ComprarVagaPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Vaga comprada com sucesso')),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Retorna para a MainPage indicando que a compra foi bem-sucedida
       } else {
         _showErrorSnackbar('Erro ao comprar vaga');
       }
@@ -643,7 +645,7 @@ class _ComprarVagaPageState extends State<ComprarVagaPage> {
                   setState(() {
                     _selectedCity = value;
                     _selectedStreet = null;
-                    _streets = [];
+                    _streets.clear();
                   });
                   if (value != null) {
                     _fetchStreets(value);
@@ -651,7 +653,7 @@ class _ComprarVagaPageState extends State<ComprarVagaPage> {
                 },
                 value: _selectedCity,
               ),
-              SizedBox(height: 10),
+              SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   labelText: 'Rua',
@@ -670,16 +672,30 @@ class _ComprarVagaPageState extends State<ComprarVagaPage> {
                 },
                 value: _selectedStreet,
               ),
-              SizedBox(height: 10),
-              TextField(
-                controller: _tempoController,
-                decoration: InputDecoration(
-                  labelText: 'Tempo (horas)',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
+              SizedBox(height: 16),
+              Text(
+                'Selecione o Tempo em Horas',
+                style: TextStyle(fontSize: 16),
               ),
-              SizedBox(height: 20),
+              SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(5, (index) {
+                  int duration = (index + 1) ; // Convertendo horas para minutos
+                  return ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedDuration = duration;
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _selectedDuration == duration ? Colors.blue : null,
+                    ),
+                    child: Text('${index + 1}h'),
+                  );
+                }),
+              ),
+              SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _comprarVaga,
                 child: Text('Comprar Vaga'),
@@ -691,3 +707,4 @@ class _ComprarVagaPageState extends State<ComprarVagaPage> {
     );
   }
 }
+
